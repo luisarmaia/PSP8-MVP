@@ -1,7 +1,7 @@
 # Atrasos de voos e clima nos aeroportos brasileiros
 
 **MVP – Pipeline de dados em nuvem** · Universidade de Brasília, Departamento de Engenharia de Produção
-Autora: *[seu nome]* · Plataforma: Databricks Free Edition
+Autora: Luísa Ramos Maia · Plataforma: Databricks Free Edition
 
 > **Resultado em uma frase:** o tempo adverso na origem ou no destino aumenta o risco de atraso em 26% a 42%, mas só 7% de todos os atrasos podem ser associados diretamente a ele; dois terços acontecem com tempo bom nas duas pontas, e a taxa de atraso dobra entre a manhã e a noite mesmo sem chuva.
 
@@ -46,12 +46,12 @@ Os atrasos se concentram em poucos aeroportos e faixas horárias, e as condiçõ
 |---|---|---|---|---|
 | **VRA – Voo Regular Ativo** | ANAC | Uma linha por etapa de voo: companhia, origem, destino, horários previstos e realizados, situação | CSV mensal, `;`, UTF-8, linha 1 = `Atualizado em` | Dados abertos governamentais (*licença a confirmar no dados.gov.br*) |
 | **Aeródromos públicos** | ANAC | Cadastro de aeródromos: código OACI, nome, município, UF, coordenadas | CSV, `;`, Latin-1 | Idem |
-| **METAR/SPECI** | Iowa Environmental Mesonet (Iowa State University), a partir de boletins do DECEA/REDEMET | Observações meteorológicas de aeroporto: visibilidade, nuvens, fenômenos, vento, rajada | CSV por aeroporto e ano, horários em UTC | Arquivo público sem restrição de acesso |
+| **METAR/SPECI** | Iowa Environmental Mesonet (Iowa State University), a partir de boletins do DECEA/REDEMET | Observações meteorológicas de aeroporto: visibilidade, nuvens, fenômenos, vento, rajada | CSV, 3 arquivos (`metar_2024`, `metar_2025`, `metar_complemento` com SBGL, SBRJ e SBNF), horários em UTC | Arquivo público sem restrição de acesso |
 
 Portal da ANAC: <https://sistemas.anac.gov.br/dadosabertos/> → *Voos e operações aéreas* → *Voo Regular Ativo (VRA)*.
 Arquivo METAR: <https://mesonet.agron.iastate.edu/request/download.phtml>.
 
-**Data da coleta, volume e hash de cada arquivo:** registrados na tabela `bronze_manifesto_coleta`, gerada pelo notebook `01_bronze` a partir dos arquivos do Volume. A persistência na nuvem está comprovada nas Figuras 1 e 2 de `evidencias.pdf`. Data do download manual: *[preencher]*.
+**Data da coleta, volume e hash de cada arquivo:** registrados na tabela `bronze_manifesto_coleta`, gerada pelo notebook `01_bronze` a partir dos arquivos do Volume. No Volume estão **28 arquivos, 345,5 MB** (24 CSVs do VRA, 3 do METAR e 1 de aeródromos), carregados em 1.992.831 etapas de voo, 381.150 observações METAR e 496 aeródromos. A persistência na nuvem está comprovada nas Evidências 1 e 2 de `evidencias.pdf`. Data do download manual: *[preencher]*.
 
 ### Achados que moldaram o escopo
 - **O VRA não traz mais o motivo do atraso.** A coluna `Código Justificativa` existe, mas está vazia em 100% das linhas verificadas (jul/2026). A obrigação de informar o motivo (IAC 1504) foi revogada em 2020. Por isso o trabalho **mede** o clima em vez de usar a justificativa declarada.
@@ -84,7 +84,7 @@ Esquema estrela com a **etapa de voo** como fato (`fato_voo`) e as dimensões `d
 O clima de cada voo é a **última observação METAR até o horário previsto**, com no máximo 90 min de defasagem: na origem, em relação à partida prevista; no destino, em relação à chegada prevista. Sem observação na janela, a condição fica como "Sem observação" e o voo não entra nas comparações de clima.
 
 - Diagrama e justificativa: [`catalogo/modelo_estrela.md`](catalogo/modelo_estrela.md)
-- Catálogo de dados (descrição, domínio, nulos e linhagem de cada atributo): [`catalogo/catalogo_dados.md`](catalogo/catalogo_dados.md); domínio observado nos dados: Figura 9 de `evidencias.pdf`
+- Catálogo de dados (descrição, domínio, nulos e linhagem de cada atributo): [`catalogo/catalogo_dados.md`](catalogo/catalogo_dados.md); domínio observado nos dados: Evidência 9 de `evidencias.pdf`
 
 ---
 
@@ -123,7 +123,7 @@ Os 20 aeroportos são os de maior número de etapas domésticas de passageiros e
 
 ## 5. Qualidade dos dados
 
-A qualidade foi medida atributo a atributo no notebook `02_silver` e registrada na tabela `silver_qualidade_dados` (uma linha por regra: dimensão, ocorrências, percentual e tratamento). Integridade e domínio do modelo final foram verificados no `03_gold` (tabela `gold_catalogo_dados`). Evidências: [`evidencias.pdf`](evidencias.pdf), Figuras 3 a 9.
+A qualidade foi medida atributo a atributo no notebook `02_silver` e registrada na tabela `silver_qualidade_dados` (uma linha por regra: dimensão, ocorrências, percentual e tratamento). Integridade e domínio do modelo final foram verificados no `03_gold` (tabela `gold_catalogo_dados`). Ver [`evidencias.pdf`](evidencias.pdf), Evidências 3 a 9.
 
 ### Voos (VRA): 1.992.831 etapas na bronze
 
@@ -140,18 +140,20 @@ A qualidade foi medida atributo a atributo no notebook `02_silver` e registrada 
 | Conformidade | Datas, códigos ICAO, situação e tipo de linha fora do padrão | 0 | — |
 | Completude | **Código de justificativa preenchido** | **0** | Atributo descartado (obrigação revogada em 2020) |
 
-Os horários estão todos no horário de Brasília: a duração prevista mediana é 3,92 h tanto em GRU→Manaus quanto em Manaus→GRU (Figura 3). Se os horários fossem locais, os dois sentidos difeririam em 2 h.
+Os horários estão todos no horário de Brasília: a duração prevista mediana é 3,92 h tanto em GRU→Manaus quanto em Manaus→GRU (Evidência 3). Se os horários fossem locais, os dois sentidos difeririam em 2 h.
 
 ### Clima (METAR)
 
 | Dimensão | Achado | Tratamento |
 |---|---|---|
 | Completude | **SBGL e SBRJ ausentes no primeiro download.** O problema foi detectado porque 26% dos voos ficaram sem observação; o METAR das duas estações foi baixado à parte. Depois disso, a cobertura passou a partir da lista de aeroportos, para que uma estação vazia apareça com 0% | Corrigido; após a correção, **1,4%** dos voos ficaram sem observação, espalhados entre todos os aeroportos (máximo de 2,4% em SBKP) |
-| Completude | As outras 17 estações do primeiro download têm observação em ≥ 99,9% das horas de 2024–2025 (conferir SBGL, SBRJ e SBNF na tabela de cobertura) | — |
-| Completude | **SBPA (Porto Alegre) sem observações em 24% das horas**: o aeroporto ficou fechado de 3 de maio a 21 de outubro de 2024 pelas enchentes no Rio Grande do Sul | Real, não é falha de dados; praticamente não houve voos no período (só 2% das etapas de SBPA ficaram sem observação) |
-| Unicidade | Observações repetidas no mesmo aeroporto e horário (≈ 0,1%) | Mantida a mais severa |
+| Completude | 18 das 20 estações têm observação em ≥ 99,9% das horas de 2024–2025, incluindo SBGL e SBRJ após a correção (1 e 2 horas faltando) | — |
+| Completude | **SBNF (Navegantes) com 80,8% das horas cobertas** (3.362 horas sem boletim). As lacunas não afetam a análise: só 1,0% das etapas de SBNF ficaram sem observação, o que indica falta de boletim em horários sem voos | Mantido; registrado no relatório |
+| Completude | **SBPA (Porto Alegre) sem observações em 24% das horas**: o aeroporto ficou fechado de 3 de maio a 21 de outubro de 2024 pelas enchentes no Rio Grande do Sul | Real, não é falha de dados (cobertura de 76,1%); praticamente não houve voos no período (só 2% das etapas de SBPA ficaram sem observação) |
+| Unicidade | 472 observações repetidas no mesmo aeroporto e horário (0,12%) | Mantida a mais severa |
+| Conformidade | 18.162 observações (4,8%) de SBPS, estação da lista inicial que saiu do escopo | Mantidas na silver; fora do cruzamento |
 | Acurácia | 2 observações com rajada > 80 kt | Mantidas (efeito desprezível) |
-| Domínio | 15% das observações com algum fator adverso | Volume suficiente para as comparações |
+| Domínio | 14,5% das observações com algum fator adverso, com grande variação entre aeroportos: de 2,7% em SBFZ (Fortaleza) a 48,3% em SBCT (Curitiba), 37,6% em SBSP e 28,1% em SBGR | Volume suficiente para as comparações; a variação reforça a necessidade de comparar dentro do mesmo aeroporto |
 
 ### Aeroportos
 43 dos 227 aeródromos com voos domésticos não constam da lista de aeródromos públicos da ANAC (aeródromos pequenos ou privados). Nenhum dos 20 aeroportos do escopo está nessa situação. Os 43 entram na `dim_aeroporto` como "não cadastrado".
@@ -159,7 +161,7 @@ Os horários estão todos no horário de Brasília: a duração prevista mediana
 ### Resultado no modelo
 - 1.600.871 etapas domésticas de passageiros; 7.243 com origem = destino removidas; **1.593.628 no fato**.
 - **1.012.383 (63,5%) em escopo** (METAR nas duas pontas); 998.133 com observação válida nas duas pontas; 980.775 com atraso calculável.
-- Integridade referencial: nenhuma chave do fato sem correspondência nas dimensões; `sk_voo` única (Figura 7).
+- Integridade referencial: nenhuma chave do fato sem correspondência nas dimensões; `sk_voo` única (Evidência 7).
 
 ---
 
@@ -168,14 +170,14 @@ Os horários estão todos no horário de Brasília: a duração prevista mediana
 Todas as taxas de atraso referem-se a **chegada mais de 15 min após o previsto**, entre voos realizados. "Razão ajustada" compara voos do **mesmo aeroporto de origem, mês e faixa horária** (Mantel-Haenszel); ela separa o efeito do clima do fato de que chove mais justamente em meses e horários que já atrasam mais.
 
 ### P1 · Onde e quando o atraso se concentra
-> Evidências: [`evidencias.pdf`](evidencias.pdf), Figuras 10 a 13 (atraso e cancelamento por aeroporto e por mês).
+> Ver [`evidencias.pdf`](evidencias.pdf), Evidências 10 a 13 (atraso e cancelamento por aeroporto e por mês).
 
 - **Aeroportos.** A taxa média dos 20 aeroportos é 15,3%. **Guarulhos (SBGR) lidera com 19,5%**; Brasília (SBBR) tem a menor, 10,8%. Os 5 aeroportos com mais atrasos (SBGR, SBSP, SBCF, SBKP, SBBR) concentram **60,3% dos atrasos com 54,9% das etapas**: a concentração existe, mas é moderada. O problema é sistêmico, não de um único aeroporto.
 - **Meses.** O atraso varia mais no tempo do que entre aeroportos: de **10,7% em agosto de 2025** (estação seca) a **26,9% em dezembro de 2025** (alta temporada e verão chuvoso). O pico de cancelamentos foi em outubro de 2024 (3,4%); os dados deste MVP não explicam esse pico, que fica como ponto a investigar.
 - **Horário.** A taxa sobe ao longo do dia: 8,0% na madrugada, 11,6% de manhã, 18,2% à tarde e 18,7% à noite (detalhado em P5).
 
 ### P2 · Tempo adverso na origem, no destino e em ambos
-> Evidências: [`evidencias.pdf`](evidencias.pdf), Figuras 14 e 15 (atraso e cancelamento por cenário).
+> Ver [`evidencias.pdf`](evidencias.pdf), Evidências 14 e 15 (atraso e cancelamento por cenário).
 
 | Cenário | Taxa de atraso | Razão bruta | **Razão ajustada** | Ajustada (> 30 min) | Cancelamento | n |
 |---|---|---|---|---|---|---|
@@ -191,7 +193,7 @@ Todas as taxas de atraso referem-se a **chegada mais de 15 min após o previsto*
 - A mediana do atraso de chegada é negativa em todos os cenários (−5 min com tempo bom): a maioria dos voos chega adiantada, o que indica folga na grade programada.
 
 ### P3 · Que condição pesa mais
-> Evidências: [`evidencias.pdf`](evidencias.pdf), Figura 16 (risco por fator).
+> Ver [`evidencias.pdf`](evidencias.pdf), Evidência 16 (risco por fator).
 
 | Fator (em pelo menos uma ponta) | Razão ajustada | Taxa de atraso | Voos | Taxa quando é o único fator (n) |
 |---|---|---|---|---|
@@ -206,7 +208,7 @@ Todas as taxas de atraso referem-se a **chegada mais de 15 min após o previsto*
 - Os fatores se sobrepõem (um voo pode ter vários), por isso as razões não devem ser somadas.
 
 ### P4 · Quanto do atraso pode ser associado ao clima
-> Evidências: [`evidencias.pdf`](evidencias.pdf), Figura 17 (decomposição dos atrasos).
+> Ver [`evidencias.pdf`](evidencias.pdf), Evidência 17 (decomposição dos atrasos).
 
 Dos **148.155 voos atrasados** em escopo:
 - **67,6% aconteceram com tempo bom na origem e no destino;**
@@ -218,7 +220,7 @@ Dos **148.155 voos atrasados** em escopo:
 **Ressalva importante:** o número mede o efeito **local e direto** do tempo nos dois aeroportos do voo. Uma tempestade em Guarulhos atrasa aeronaves que, horas depois, voam Brasília–Recife sob céu limpo; esse atraso propagado aparece aqui como "tempo bom". Os 7,0% são, portanto, um **limite inferior** do efeito total do clima na malha.
 
 ### P5 · Efeito cascata ao longo do dia
-> Evidências: [`evidencias.pdf`](evidencias.pdf), Figura 18 (atraso por hora).
+> Ver [`evidencias.pdf`](evidencias.pdf), Evidência 18 (atraso por hora).
 
 Mesmo com **tempo bom nas duas pontas**, a taxa de atraso sobe de **8,9% (partidas das 6h às 9h) para 17,3% (das 18h às 21h)**: quase o dobro (1,93×). A correlação entre hora e taxa, das 5h às 23h, é 0,82, e o pico é às 18h (19,2%). A curva com tempo adverso fica acima, mas segue o mesmo desenho.
 
@@ -255,16 +257,16 @@ As cinco. P1, P2, P3 e P5 foram respondidas integralmente. P4 foi respondida com
 - Ampliar para todos os aeroportos com METAR e adicionar previsão (TAF) para estimar o risco de atraso antes do voo.
 - Painel para o consumidor consultar, por voo, se havia tempo adverso registrado na origem ou no destino.
 
-**Viabilidade:** todo o pipeline roda no Databricks Free Edition, sem custo, com cerca de 400 MB de dados brutos e alguns minutos de processamento por execução.
+**Viabilidade:** todo o pipeline roda no Databricks Free Edition, sem custo, com 345,5 MB de dados brutos e alguns minutos de processamento por execução.
 
 
 ---
 
 ## 8. Evidências
 
-As capturas de tela da execução no Databricks e os gráficos dos resultados estão reunidos, com legendas, em **[`evidencias.pdf`](evidencias.pdf)**. As figuras são citadas pelo número ao longo deste documento.
+As capturas de tela da execução no Databricks e os gráficos dos resultados estão reunidos, com legendas, em **[`evidencias.pdf`](evidencias.pdf)**. As evidências são citadas pelo número ao longo deste documento: 1 a 9 comprovam a execução do pipeline na nuvem, e 10 a 18 são os gráficos das perguntas de negócio.
 
-| Figura | Conteúdo | Origem | Citada em |
+| Evidência | Conteúdo | Origem | Citada em |
 |---|---|---|---|
 | 1 | Arquivos brutos no Volume `workspace.mvp_voos.raw` | `00_setup`, célula de conferência | Seção 2 |
 | 2 | Contagem de linhas das tabelas bronze | `01_bronze`, conferência | Seção 2 |
