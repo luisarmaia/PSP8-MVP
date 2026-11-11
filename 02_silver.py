@@ -227,13 +227,14 @@ display(spark.sql(f"""
 
 # MAGIC %md
 # MAGIC ### Conferência dos 20 aeroportos do METAR
-# MAGIC A lista usada no download do METAR veio da amostra de jul/2026. Aqui ela é conferida
-# MAGIC com as etapas domésticas de passageiros de 2024–2025.
+# MAGIC A lista inicial do download do METAR veio da amostra de jul/2026. Conferida com 2024–2025,
+# MAGIC SBNF (Navegantes) entrou no 20º lugar no lugar de SBPS (Porto Seguro); a lista abaixo já
+# MAGIC está corrigida e o METAR de SBNF foi baixado à parte.
 
 # COMMAND ----------
 
 AEROPORTOS_METAR = ["SBGR", "SBSP", "SBBR", "SBCF", "SBKP", "SBGL", "SBRF", "SBSV", "SBRJ", "SBPA",
-                    "SBCT", "SBFZ", "SBBE", "SBFL", "SBGO", "SBEG", "SBVT", "SBPS", "SBMO", "SBCY"]
+                    "SBCT", "SBFZ", "SBBE", "SBFL", "SBGO", "SBEG", "SBVT", "SBNF", "SBMO", "SBCY"]
 
 ranking = (spark.table(tabela("silver_voo")).filter("codigo_tipo_linha = 'N'")
     .select(F.explode(F.array("origem_icao", "destino_icao")).alias("icao"))
@@ -335,16 +336,25 @@ metar.unpersist()
 # COMMAND ----------
 
 horas_periodo = 731 * 24  # 2024 (bissexto) + 2025
+# Parte da LISTA de aeroportos (e não das observações), para que uma estação sem
+# nenhum dado apareça com cobertura 0% em vez de sumir do relatório.
+spark.createDataFrame([(a,) for a in AEROPORTOS_METAR], "aeroporto_icao string") \
+    .createOrReplaceTempView("lista_metar")
 cobertura = spark.sql(f"""
-  SELECT aeroporto_icao,
-         COUNT(DISTINCT date_trunc('HOUR', observacao_utc)) AS horas_com_observacao,
-         ROUND(100 * COUNT(DISTINCT date_trunc('HOUR', observacao_utc)) / {horas_periodo}, 1) AS cobertura_pct,
-         ROUND(100 * AVG(CAST(tempo_adverso AS INT)), 1) AS pct_obs_tempo_adverso
-  FROM {tabela('silver_metar')}
-  WHERE observacao_utc >= '2024-01-01' AND observacao_utc < '2026-01-01'
+  SELECT l.aeroporto_icao,
+         COUNT(DISTINCT date_trunc('HOUR', m.observacao_utc)) AS horas_com_observacao,
+         ROUND(100 * COUNT(DISTINCT date_trunc('HOUR', m.observacao_utc)) / {horas_periodo}, 1) AS cobertura_pct,
+         ROUND(100 * AVG(CAST(m.tempo_adverso AS INT)), 1) AS pct_obs_tempo_adverso
+  FROM lista_metar l
+  LEFT JOIN {tabela('silver_metar')} m
+    ON m.aeroporto_icao = l.aeroporto_icao
+   AND m.observacao_utc >= '2024-01-01' AND m.observacao_utc < '2026-01-01'
   GROUP BY 1 ORDER BY cobertura_pct
 """)
 display(cobertura)
+sem_dados = [l.aeroporto_icao for l in cobertura.collect() if l.horas_com_observacao == 0]
+if sem_dados:
+    print("ATENÇÃO: aeroportos da lista sem nenhuma observação METAR:", sem_dados)
 for linha in cobertura.collect():
     registrar("silver_metar", f"cobertura {linha.aeroporto_icao}", "Completude",
               "Horas de 2024–2025 sem nenhuma observação", horas_periodo - linha.horas_com_observacao,

@@ -36,7 +36,7 @@ CATALOGO, SCHEMA = "workspace", "mvp_voos"
 spark.conf.set("spark.sql.session.timeZone", "UTC")
 
 AEROPORTOS_METAR = ["SBGR", "SBSP", "SBBR", "SBCF", "SBKP", "SBGL", "SBRF", "SBSV", "SBRJ", "SBPA",
-                    "SBCT", "SBFZ", "SBBE", "SBFL", "SBGO", "SBEG", "SBVT", "SBPS", "SBMO", "SBCY"]
+                    "SBCT", "SBFZ", "SBBE", "SBFL", "SBGO", "SBEG", "SBVT", "SBNF", "SBMO", "SBCY"]
 JANELA_MIN = 90
 
 FLAGS = [  # (coluna em silver_metar, peso no código da condição, rótulo)
@@ -305,6 +305,26 @@ display(spark.sql(f"""
          ROUND(AVG(defasagem_obs_destino_min), 1) AS defasagem_media_destino_min
   FROM {tabela('fato_voo')} WHERE em_escopo
   GROUP BY 1 ORDER BY etapas DESC
+"""))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Diagnóstico: em quais aeroportos falta observação. Se um aeroporto concentrar a falta,
+# MAGIC o problema está nos dados METAR daquela estação, e não na regra de junção.
+
+# COMMAND ----------
+
+display(spark.sql(f"""
+  SELECT aeroporto, SUM(sem_obs) AS etapas_sem_observacao,
+         ROUND(100 * SUM(sem_obs) / SUM(total), 1) AS pct_das_etapas_do_aeroporto
+  FROM (
+    SELECT sk_aeroporto_origem AS aeroporto, CAST(sk_condicao_origem = -1 AS INT) AS sem_obs, 1 AS total
+    FROM {tabela('fato_voo')} WHERE em_escopo
+    UNION ALL
+    SELECT sk_aeroporto_destino, CAST(sk_condicao_destino = -1 AS INT), 1
+    FROM {tabela('fato_voo')} WHERE em_escopo
+  ) GROUP BY 1 ORDER BY etapas_sem_observacao DESC
 """))
 
 # COMMAND ----------
